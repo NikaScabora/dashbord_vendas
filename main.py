@@ -8,16 +8,62 @@ import pandas as pd
 import calendar
 import locale
 
+# VARIAVEIS DE APOIO_______________________________________________________________________________________________________________
+dark_tema='darkly'
+vapor_tema='vapor'
 
-# import dados
+url_dark=dbc.themes.DARKLY
+url_vapor=dbc.themes.VAPOR
+
+
+# import dados____________________________________________________________________________________________________________________
 df=pd.read_csv('arquivos/dados_completos.csv')
 
+df['dt_Venda']=pd.to_datetime(df['dt_Venda'])
+df['Mês']=df['dt_Venda'].dt.strftime('%b').str.upper()
 
-# criando app
+# lista de apoio_________________________________________________________________________________________________________________
+lista_meses=[]
+for mes in df['Mês'].unique():
+    lista_meses.append({
+        'label':mes,
+        'value':mes
+    })
+lista_meses.append({'label':'Ano completo','value':'ano'})
+
+lista_categorias=[]
+for categorias in df['Categorias'].unique():
+    lista_categorias.append({
+        'label': categorias,
+        'value':categorias
+    })
+lista_categorias.append({'label':'Todas as categorias','value':'cat' })
+# FIM_____________________________________________________________________________________________________LISTA DE APOIO_________
+
+# funçoes de apoio_______________________________________________________________________________________________________________
+def filtro_cliente(cliente_selecionado):
+    if cliente_selecionado is None:
+        return pd.Series(True,index=df.index)
+    else:
+        return df['Cliente']==cliente_selecionado
+
+def filtro_mes(mes_selecionado):
+    if mes_selecionado is None:
+        return pd.Series(True,index=df.index)
+    elif mes_selecionado=='ano':
+        return df['Mês']
+    return df['Mês']==mes_selecionado
+
+def filtro_categoria(categoria_selecionada):
+    if categoria_selecionada is None:
+        return pd.Series(True,index=df.index)
+    elif categoria_selecionada=='cat':
+        return df['Categorias']
+    return df['Categorias']==categoria_selecionada
+# criando app____________________________________________________________________________________________________________________
 app=dash.Dash(__name__)
 
-
-# montando layout
+# montando layout________________________________________________________________________________________________________________
 linha_cabecalho=html.Div([
     html.Div([
         dcc.Dropdown(
@@ -25,24 +71,165 @@ linha_cabecalho=html.Div([
             options=df['Cliente'].unique(),
             placeholder='Clientes',
             style={
-                'font-Family':'Fira Code'
+                'font-Family':'Fira Code',
+                'color':'#101010'
             }
         )
-    ],style={'width':'25%'})
+    ],style={'width':'25%'}),
 
-])
+    html.Div(
+        html.Legend(
+            'Nika Store',
+            style={'font-size': '150%','text-align':'center'}
+        ),
+        style={'width':'50%'}
+    ),
+    html.Div(
+        ThemeSwitchAIO(
+            aio_id='theme',
+            themes=[
+                url_dark,
+                url_vapor
+            ]
+        ),style={'width':'25%'}
+    )
+
+],style={
+    'text-align': 'center',
+    'display':'flex',
+    'justify-content':'space-beetwen',
+    'align-items':'center',
+    'margin-top':'20px'
+})
+
+linha_1=html.Div([
+
+    html.Div([
+        html.H4(id='output_cliente'),
+        dcc.Graph(id='visual01')
+
+    ],
+        style={'text-align':'center', 'width':'65%'}),
+
+    html.Div([
+        dbc.RadioItems(
+           id='radio_meses',
+           options=lista_meses,
+           inline=True
+        ),
+        dbc.RadioItems(
+           id='radio_categoria',
+           options=lista_categorias,
+           inline=True
+        ),
+    ],style={
+        'display':'flex',
+        'flex-direction':'column',
+        'width':'30%',
+        'justify-content':'space-around',
+        'height':'300px'
+    })
+
+],style={
+    'margin-top': '40px',
+    'display':'flex',
+    'justify-content':'space-around',
+    'height': '300px'}
+)
+
+linha_2=html.Div([
+    dcc.Graph(id='visual02',style={'width':'65%'}),
+    dcc.Graph(id='visual03',style={'width':'30%'})
+],style={
+    'display':'flex',
+    'justify-content':'space-evenly',
+    'height': '300px'
+})
+
 
 
 
 
 app.layout=html.Div([
-    linha_cabecalho
+    linha_cabecalho,
+    linha_1,
+    linha_2
 ])
 
-# callbacks
+# callbacks______________________________________________________________________________________________________________________
+
+@app.callback(
+    Output('output_cliente','children'),
+    Input("dropdown_clientes", 'value')
+
+)
+def aualizar_txt(cliente_selecionado):
+    if cliente_selecionado:
+        return f'Top5 Produtos comprados por: {cliente_selecionado}'
+    return 'Top5 Produtos vendidos!'
+
+@app.callback(
+    Output('visual01','figure'),
+    [
+        Input('dropdown_clientes','value'),
+        Input('radio_meses','value'),
+        Input('radio_categoria','value'),
+        Input(ThemeSwitchAIO.ids.switch('theme'),'value')
+    ]
+)
+def visual01(cliente,mes,categoria,taggle):
+
+    template=dark_tema if taggle else vapor_tema
+    nome_cliente = filtro_cliente(cliente)
+    nome_mes=filtro_mes(mes)
+    nome_categoria=filtro_categoria(categoria)
 
 
-# subindo no servidor
+    filtros=nome_cliente&nome_mes&nome_categoria
+
+    df1=df.loc[filtros]
+
+
+
+    df_grupo=df1.groupby(['Produto','Categorias'])['Total'].sum().reset_index()
+    df_top5=df_grupo.sort_values(by='Total',ascending=False).head(5)
+
+    fig1=px.bar(
+        df_top5,
+        x='Produto',
+        y='Total',
+        text='Total',
+        color_continuous_scale='Blues',
+        height=280,
+        template=template
+    )
+    fig1.update_traces(texttemplate='%{text:.2s}', textposition='outside')
+
+    fig1.update_layout(
+        margin={'t':0},
+        xaxis={'showgrid':False},
+        yaxis={
+            'showgrid':False,
+            'range':[df_top5['Total'].min(),df_top5['Total'].max()]
+        },
+        xaxis_title=None,
+        yaxis_title=None,
+        xaxis_tickangle=-15,
+        font={'size':13},
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
+
+    )
+
+    return fig1
+
+
+
+
+
+
+
+# subindo no servidor____________________________________________________________________________________________________________
 if __name__=='__main__':app.run_server(debug=True)
 
 
