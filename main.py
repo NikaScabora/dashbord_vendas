@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import plotly_express as px
 import pandas as pd
 import calendar
-import locale
+# import locale
 
 # VARIAVEIS DE APOIO_______________________________________________________________________________________________________________
 dark_tema='darkly'
@@ -62,6 +62,7 @@ def filtro_categoria(categoria_selecionada):
     return df['Categorias']==categoria_selecionada
 # criando app____________________________________________________________________________________________________________________
 app=dash.Dash(__name__)
+server=app.server
 
 # montando layout________________________________________________________________________________________________________________
 linha_cabecalho=html.Div([
@@ -145,10 +146,6 @@ linha_2=html.Div([
     'justify-content':'space-evenly',
     'height': '300px'
 })
-
-
-
-
 
 app.layout=html.Div([
     linha_cabecalho,
